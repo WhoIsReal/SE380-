@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:se_term_project/register_screen.dart';
 import 'main.dart';
 
@@ -10,6 +11,43 @@ class LoginScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     TextEditingController emailController = TextEditingController();
     TextEditingController passwordController = TextEditingController();
+
+    Future<void> loginUser() async {
+      final email = emailController.text.trim();
+      final password = passwordController.text.trim();
+
+      if (email.isEmpty || password.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Please enter both email and password")),
+        );
+        return;
+      }
+
+      try {
+        final snapshot = await FirebaseFirestore.instance
+            .collection('users')
+            .where('email', isEqualTo: email)
+            .where('password', isEqualTo: password)
+            .get();
+
+        if (snapshot.docs.isNotEmpty) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const HomeScreen(),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Invalid email or password")),
+          );
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Login failed: \$e")),
+        );
+      }
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -25,7 +63,7 @@ class LoginScreen extends StatelessWidget {
             letterSpacing: 1.2,
           ),
         ),
-        iconTheme: IconThemeData(color: Colors.white),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Center(
         child: SingleChildScrollView(
@@ -33,7 +71,6 @@ class LoginScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Başlık kutusu
               Container(
                 padding: const EdgeInsets.all(16),
                 margin: const EdgeInsets.only(bottom: 32),
@@ -59,38 +96,24 @@ class LoginScreen extends StatelessWidget {
                   textAlign: TextAlign.center,
                 ),
               ),
-
-              // Email
               TextField(
                 controller: emailController,
                 decoration: const InputDecoration(labelText: "Email"),
               ),
               const SizedBox(height: 12),
-
-              // Password
               TextField(
                 controller: passwordController,
                 obscureText: true,
                 decoration: const InputDecoration(labelText: "Password"),
               ),
               const SizedBox(height: 24),
-
-              // Login button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const HomeScreen(),
-                      ),
-                    );
-                  },
+                  onPressed: loginUser,
                   child: const Text("Login"),
                 ),
               ),
-              // Register geçiş
               TextButton(
                 onPressed: () {
                   Navigator.push(
@@ -103,10 +126,9 @@ class LoginScreen extends StatelessWidget {
                 child: const Text(
                   "Don't have an account? Register",
                   style: TextStyle(
-                    fontSize: 16, // <-- Büyüklük artırıldı
-                    fontWeight: FontWeight.w500, // Hafif kalınlık eklendi
-                    color:
-                        Colors.deepPurple, // İsteğe bağlı: Temaya uyumlu renk
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.deepPurple,
                   ),
                 ),
               ),

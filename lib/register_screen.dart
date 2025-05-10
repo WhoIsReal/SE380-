@@ -132,36 +132,6 @@ class RegisterScreen extends StatelessWidget {
                   child: const Text("Register"),
                 ),
               ),
-              const SizedBox(height: 32),
-              const Divider(),
-              const SizedBox(height: 12),
-              const Text(
-                "Shared List Users",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance.collection('users').orderBy('createdAt').snapshots(),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) {
-                    return const CircularProgressIndicator();
-                  }
-                  final docs = snapshot.data!.docs;
-                  return ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: docs.length,
-                    itemBuilder: (context, index) {
-                      final data = docs[index].data() as Map<String, dynamic>;
-                      return CheckboxListTile(
-                        title: Text(data['name'] ?? 'Unnamed'),
-                        value: false,
-                        onChanged: (val) {},
-                      );
-                    },
-                  );
-                },
-              ),
             ],
           ),
         ),
