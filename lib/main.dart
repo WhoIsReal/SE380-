@@ -50,8 +50,8 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  Future<void> _addTaskToFirestore(String title, List<String> sharedUsers) async {
-    await FirebaseFirestore.instance.collection('tasks').add({
+  Future<void> _addTaskGroupToFirestore(String title, List<String> sharedUsers) async {
+    await FirebaseFirestore.instance.collection('tasksGroups').add({
       'title': title,
       'sharedWith': sharedUsers,
       'timestamp': FieldValue.serverTimestamp(),
@@ -118,7 +118,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           .map((entry) => entry.key)
                           .toList();
 
-                      await _addTaskToFirestore(taskController.text, selected);
+                      await _addTaskGroupToFirestore(taskController.text, selected);
 
                       for (var user in users) {
                         selectedUsers[user] = false;
@@ -151,16 +151,16 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('tasks').orderBy('timestamp').snapshots(),
+        stream: FirebaseFirestore.instance.collection('taskGroups').orderBy('timestamp').snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final tasks = snapshot.data!.docs;
+          final taskGroups = snapshot.data!.docs;
 
           return ListView(
-            children: tasks.map((doc) {
+            children: taskGroups.map((doc) {
               final data = doc.data() as Map<String, dynamic>;
               final title = data['title'];
               final users = data['sharedWith'] as List<dynamic>;
@@ -168,7 +168,15 @@ class _HomeScreenState extends State<HomeScreen> {
               return ListTile(
                 title: Text(title),
                 subtitle: Text("Shared with ${users.length} people"),
-                trailing: const Icon(Icons.check_circle_outline),
+                trailing: const Icon(Icons.group),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => TaskListScreen(title: title),
+                    ),
+                  );
+                },
               );
             }).toList(),
           );
