@@ -205,45 +205,98 @@ class _TaskListScreenState extends State<TaskListScreen> {
   void _addTask() {
     TextEditingController taskController = TextEditingController();
     TextEditingController descController = TextEditingController();
+    String? selectedAssignee = "Unassigned";
+
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
           title: const Text("Add Task"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: taskController,
-                decoration: const InputDecoration(hintText: "Enter task name"),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: descController,
-                decoration: const InputDecoration(
-                  hintText: "Enter task description",
+          content: StatefulBuilder(
+            builder: (context, setInnerState) {
+              return SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: taskController,
+                      decoration: const InputDecoration(hintText: "Enter task name"),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: descController,
+                      decoration: const InputDecoration(hintText: "Enter task description"),
+                    ),
+                    const SizedBox(height: 20),
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text("Assign to:"),
+                    ),
+                    FutureBuilder<DocumentSnapshot>(
+                      future: FirebaseFirestore.instance
+                          .collection('taskGroups')
+                          .where('title', isEqualTo: widget.title)
+                          .limit(1)
+                          .get()
+                          .then((snapshot) => snapshot.docs.first),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) return const CircularProgressIndicator();
+
+                        List<dynamic> sharedUsers = snapshot.data!['sharedWith'];
+                        List<String> options = ["Unassigned", ...sharedUsers.map((u) => u.toString())];
+
+                        return DropdownButton<String>(
+                          isExpanded: true,
+                          value: selectedAssignee,
+                          items: options.map((user) {
+                            return DropdownMenuItem(
+                              value: user,
+                              child: Text(user),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            setInnerState(() {
+                              selectedAssignee = value;
+                            });
+                          },
+                        );
+                      },
+                    ),
+                  ],
                 ),
-              ),
-            ],
+              );
+            },
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
+              onPressed: () => Navigator.pop(context),
               child: const Text("Cancel"),
             ),
             TextButton(
-              onPressed: () {
+              onPressed: () async {
                 if (taskController.text.isNotEmpty) {
-                  setState(() {
-                    tasks.add({
-                      "title": taskController.text,
-                      "completed": false,
-                    });
+                  final groupSnapshot = await FirebaseFirestore.instance
+                      .collection('taskGroups')
+                      .where('title', isEqualTo: widget.title)
+                      .limit(1)
+                      .get();
+
+                  final groupId = groupSnapshot.docs.first.id;
+
+                  await FirebaseFirestore.instance
+                      .collection('taskGroups')
+                      .doc(groupId)
+                      .collection('tasks')
+                      .add({
+                    "title": taskController.text,
+                    "description": descController.text,
+                    "completed": false,
+                    "assignee": selectedAssignee == "Unassigned" ? null : selectedAssignee,
+                    "timestamp": FieldValue.serverTimestamp(),
                   });
+
+                  Navigator.pop(context);
                 }
-                Navigator.pop(context);
               },
               child: const Text("Add"),
             ),
@@ -257,37 +310,68 @@ class _TaskListScreenState extends State<TaskListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(widget.title)),
-      body:
-      tasks.isEmpty
-          ? const Center(child: Text("No tasks yet. Add some!"))
-          : ListView.builder(
-        itemCount: tasks.length,
-        itemBuilder: (context, index) {
-          return ListTile(
-            title: Text(tasks[index]["title"]),
-            leading: Checkbox(
-              value: tasks[index]["completed"],
-              onChanged: (bool? value) {
-                setState(() {
-                  tasks[index]["completed"] = value!;
-                });
-              },
-            ),
-            trailing: IconButton(
-              icon: const Icon(Icons.delete),
-              onPressed: () {
-                setState(() {
-                  tasks.removeAt(index);
-                });
-              },
-            ),
+
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('taskGroups')
+            .doc(widget.title)
+            .collection('tasksList')
+            .orderBy('timestamp')
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return const Center(child: Text("No tasks yet. Add some!"));
+          }
+
+          final tasksList = snapshot.data!.docs;
+
+          return ListView.builder(
+            itemCount: tasksList.length,
+            itemBuilder: (context, index) {
+              final task = tasksList[index].data() as Map<String, dynamic>;
+
+              return ListTile(
+                title: Text(task["title"] ?? "Untitled"),
+                subtitle: Text(task["assignedTo"] != null && task["assignedTo"] != ""
+                    ? "Assigned to ${task["assignedTo"]}"
+                    : "Unassigned"),
+                leading: Checkbox(
+                  value: task["completed"] ?? false,
+                  onChanged: (bool? value) {
+                    FirebaseFirestore.instance
+                        .collection('taskGroups')
+                        .doc(widget.title)
+                        .collection('tasksList')
+                        .doc(tasksList[index].id)
+                        .update({"completed": value});
+                  },
+                ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete),
+                  onPressed: () {
+                    FirebaseFirestore.instance
+                        .collection('taskGroups')
+                        .doc(widget.title)
+                        .collection('tasksList')
+                        .doc(tasksList[index].id)
+                        .delete();
+                  },
+                ),
+              );
+            },
           );
         },
       ),
+
       floatingActionButton: FloatingActionButton(
         child: const Icon(Icons.add),
         onPressed: _addTask,
       ),
     );
   }
+
 }
