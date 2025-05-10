@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "733791972771",
+    "project_id": "se380-term-project-478b1",
+    "storage_bucket": "se380-term-project-478b1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:733791972771:android:025c877087add7604dbe16",
+        "android_client_info": {
+          "package_name": "com.example.se_term_project"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDi3otf0oad30sTFDb7gHbKlTiQ__4uAZw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
