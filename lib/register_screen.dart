@@ -54,7 +54,7 @@ class RegisterScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.deepPurple,
+        backgroundColor: Colors.blue,
         elevation: 4,
         centerTitle: true,
         title: const Text(
@@ -80,11 +80,11 @@ class RegisterScreen extends StatelessWidget {
                 padding: const EdgeInsets.all(16),
                 margin: const EdgeInsets.only(bottom: 32),
                 decoration: BoxDecoration(
-                  color: Colors.deepPurple[100],
+                  color: Colors.blue[100],
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.deepPurple.withOpacity(0.3),
+                      color: Colors.blueAccent.withOpacity(0.3),
                       offset: const Offset(0, 3),
                       blurRadius: 6,
                     ),
@@ -95,7 +95,7 @@ class RegisterScreen extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 30,
                     fontWeight: FontWeight.bold,
-                    color: Colors.deepPurple,
+                    color: Colors.blue,
                     letterSpacing: 1.5,
                   ),
                   textAlign: TextAlign.center,
@@ -129,7 +129,11 @@ class RegisterScreen extends StatelessWidget {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: registerUser,
-                  child: const Text("Register"),
+                  child: const Text("Register",
+                    style: TextStyle(
+                      color: Colors.blue
+                    ),
+                  ),
                 ),
               ),
             ],

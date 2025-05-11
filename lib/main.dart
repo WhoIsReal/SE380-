@@ -78,57 +78,109 @@ class _HomeScreenState extends State<HomeScreen> {
         return StatefulBuilder(
           builder: (context, setInnerState) {
             return AlertDialog(
-              title: const Text("Add New Shared Task"),
+              title: const Text(
+                "Add New Shared Task Group",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
               content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: taskController,
-                      decoration: const InputDecoration(
-                        hintText: "Enter task name",
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Task Name Field
+                      TextField(
+                        controller: taskController,
+                        decoration: InputDecoration(
+                          hintText: "Enter task group name",
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8.0),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                              vertical: 12.0, horizontal: 16.0),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 20),
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text("Select users to share with:"),
-                    ),
-                    ...users.map((user) {
-                      return CheckboxListTile(
-                        title: Text(user),
-                        value: selectedUsers[user],
-                        onChanged: (bool? value) {
-                          setInnerState(() {
-                            selectedUsers[user] = value ?? false;
-                          });
-                        },
-                      );
-                    }).toList(),
-                  ],
+                      const SizedBox(height: 20),
+
+                      // Users Section
+                      const Text(
+                        "Select users to share with:",
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                      const SizedBox(height: 10),
+
+                      // User checkboxes
+                      Column(
+                        children: users.map((user) {
+                          return Card(
+                            margin: const EdgeInsets.symmetric(vertical: 6),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            elevation: 2,
+                            child: CheckboxListTile(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                              title: Text(user),
+                              value: selectedUsers[user],
+                              onChanged: (bool? value) {
+                                setInnerState(() {
+                                  selectedUsers[user] = value ?? false;
+                                });
+                              },
+                              controlAffinity: ListTileControlAffinity.leading,
+                            ),
+                          );
+                        }).toList(),
+                      ),
+
+                      // Validation message
+                      if (selectedUsers.entries.every((entry) => !entry.value))
+                        const Padding(
+                          padding: EdgeInsets.only(top: 8.0),
+                          child: Text(
+                            "Please select at least one user.",
+                            style: TextStyle(color: Colors.red, fontSize: 14),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
               actions: [
+                // Cancel Button
                 TextButton(
                   onPressed: () {
                     Navigator.pop(context);
                   },
-                  child: const Text("Cancel"),
+                  child: const Text(
+                    "Cancel",
+                    style: TextStyle(color: Colors.red),
+                  ),
                 ),
+                // Add Button
                 TextButton(
                   onPressed: () async {
                     if (taskController.text.isNotEmpty) {
-                      final selected =
-                          selectedUsers.entries
-                              .where((entry) => entry.value)
-                              .map((entry) => entry.key)
-                              .toList();
+                      final selected = selectedUsers.entries
+                          .where((entry) => entry.value)
+                          .map((entry) => entry.key)
+                          .toList();
+
+                      // Validate if at least one user is selected
+                      if (selected.isEmpty) {
+                        setInnerState(() {
+                          // Force rebuild to show validation message
+                        });
+                        return; // Do not proceed with adding if no user is selected
+                      }
 
                       await _addTaskGroupToFirestore(
                         taskController.text,
                         selected,
                       );
 
+                      // Reset selected users
                       for (var user in users) {
                         selectedUsers[user] = false;
                       }
@@ -136,7 +188,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       Navigator.pop(context);
                     }
                   },
-                  child: const Text("Add"),
+                  child: const Text(
+                    "Add",
+                    style: TextStyle(color: Colors.blue),
+                  ),
                 ),
               ],
             );
@@ -144,6 +199,7 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       },
     );
+
   }
 
   @override
@@ -151,7 +207,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Shared To-Do List"),
-        backgroundColor: Colors.deepPurple,
+        backgroundColor: Colors.blue,
         centerTitle: true,
         titleTextStyle: const TextStyle(
           fontSize: 22,
@@ -184,36 +240,64 @@ class _HomeScreenState extends State<HomeScreen> {
 
           final taskGroups = snapshot.data!.docs;
 
-          return ListView(
-            children: taskGroups.map((doc) {
+          return ListView.builder(
+            padding: const EdgeInsets.all(12),
+            itemCount: taskGroups.length,
+            itemBuilder: (context, index) {
+              final doc = taskGroups[index];
               final data = doc.data() as Map<String, dynamic>;
               final title = data['title'];
               final users = data['sharedWith'] as List<dynamic>;
 
-              return ListTile(
-                title: Text(title),
-                subtitle: Text("Shared with ${users.length} people"),
-                trailing: const Icon(Icons.group),
+              return Card(
+                elevation: 3,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                margin: const EdgeInsets.symmetric(vertical: 8),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.blueAccent,
+                    child: Text(
+                      title[0].toUpperCase(),
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ),
+                  title: Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  subtitle: Text(
+                    "Shared with ${users.length} people",
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
                   onTap: () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (context) => TaskListScreen(
                           title: title,
-                          currentUserName: widget.currentUserName, // ✅ FIXED
+                          currentUserName: widget.currentUserName,
                         ),
                       ),
                     );
                   },
+                ),
               );
-            }).toList(),
+            },
           );
+
         },
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddTaskDialog,
         child: const Icon(Icons.add),
-        backgroundColor: Colors.deepPurple,
+        backgroundColor: Colors.blue,
       ),
     );
   }
@@ -243,86 +327,156 @@ class _TaskListScreenState extends State<TaskListScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text("Add Task"),
+          title: const Text(
+            "Add Task",
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
           content: StatefulBuilder(
             builder: (context, setInnerState) {
-              return SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: taskController,
-                      decoration: const InputDecoration(
-                        hintText: "Enter task name",
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: descController,
-                      decoration: const InputDecoration(
-                        hintText: "Enter task description",
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text("Assign to:"),
-                    ),
-                    FutureBuilder<DocumentSnapshot>(
-                      future: FirebaseFirestore.instance
-                          .collection('taskGroups')
-                          .where('title', isEqualTo: widget.title)
-                          .limit(1)
-                          .get()
-                          .then((snapshot) => snapshot.docs.first),
-                      builder: (context, snapshot) {
-                        if (!snapshot.hasData)
-                          return const CircularProgressIndicator();
+              return ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxHeight: 600, // Maximum height for the dialog
+                  maxWidth: 500,  // Maximum width for the dialog, increased for more space
+                ),
+                child: SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch, // Stretches children horizontally
+                      children: [
+                        // Task Title Field (larger horizontally)
+                        TextField(
+                          controller: taskController,
+                          decoration: InputDecoration(
+                            hintText: "Enter task name",
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10.0),
+                              borderSide: const BorderSide(color: Colors.grey),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                                vertical: 16.0, horizontal: 20.0),
+                          ),
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                        const SizedBox(height: 16),
 
-                        List<dynamic> sharedUsers =
+                        // Scrollable Description Field (larger horizontally)
+                        const Text(
+                          "Description:",
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          height: 180, // Increased height for more space
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Scrollbar(
+                            thumbVisibility: true,
+                            child: SingleChildScrollView(
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              child: TextField(
+                                controller: descController,
+                                decoration: const InputDecoration(
+                                  hintText: "Enter task description",
+                                  border: InputBorder.none,
+                                ),
+                                keyboardType: TextInputType.multiline,
+                                maxLines: null,
+                                style: const TextStyle(fontSize: 16),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Assignee Dropdown (larger horizontally)
+                        const Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            "Assign to:",
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        FutureBuilder<DocumentSnapshot>(
+                          future: FirebaseFirestore.instance
+                              .collection('taskGroups')
+                              .where('title', isEqualTo: widget.title)
+                              .limit(1)
+                              .get()
+                              .then((snapshot) => snapshot.docs.first),
+                          builder: (context, snapshot) {
+                            if (!snapshot.hasData) {
+                              return const CircularProgressIndicator();
+                            }
+
+                            List<dynamic> sharedUsers =
                             snapshot.data!['sharedWith'];
-                        List<String> options = [
-                          "Unassigned",
-                          ...sharedUsers.map((u) => u.toString()),
-                        ];
+                            List<String> options = [
+                              "Unassigned",
+                              ...sharedUsers.map((u) => u.toString()),
+                            ];
 
-                        return DropdownButton<String>(
-                          isExpanded: true,
-                          value: selectedAssignee,
-                          items:
-                              options.map((user) {
-                                return DropdownMenuItem(
-                                  value: user,
-                                  child: Text(user),
-                                );
-                              }).toList(),
-                          onChanged: (value) {
-                            setInnerState(() {
-                              selectedAssignee = value;
-                            });
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: Colors.grey),
+                              ),
+                              child: DropdownButton<String>(
+                                isExpanded: true,
+                                value: selectedAssignee,
+                                items: options.map((user) {
+                                  return DropdownMenuItem(
+                                    value: user,
+                                    child: Text(user),
+                                  );
+                                }).toList(),
+                                onChanged: (value) {
+                                  setInnerState(() {
+                                    selectedAssignee = value;
+                                  });
+                                },
+                              ),
+                            );
                           },
-                        );
-                      },
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               );
             },
           ),
           actions: [
+            // Cancel Button
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text("Cancel"),
+              child: const Text(
+                "Cancel",
+                style: TextStyle(color: Colors.red),
+              ),
             ),
-            TextButton(
+            // Add Button (styled)
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
+              ),
               onPressed: () async {
                 if (taskController.text.isNotEmpty) {
-                  final groupSnapshot =
-                      await FirebaseFirestore.instance
-                          .collection('taskGroups')
-                          .where('title', isEqualTo: widget.title)
-                          .limit(1)
-                          .get();
+                  final groupSnapshot = await FirebaseFirestore.instance
+                      .collection('taskGroups')
+                      .where('title', isEqualTo: widget.title)
+                      .limit(1)
+                      .get();
 
                   final groupId = groupSnapshot.docs.first.id;
 
@@ -331,20 +485,20 @@ class _TaskListScreenState extends State<TaskListScreen> {
                       .doc(groupId)
                       .collection('tasksList')
                       .add({
-                        "title": taskController.text,
-                        "description": descController.text,
-                        "completed": false,
-                        "assignee":
-                            selectedAssignee == "Unassigned"
-                                ? null
-                                : selectedAssignee,
-                        "timestamp": FieldValue.serverTimestamp(),
-                      });
+                    "title": taskController.text,
+                    "description": descController.text,
+                    "completed": false,
+                    "assignee": selectedAssignee == "Unassigned" ? null : selectedAssignee,
+                    "timestamp": FieldValue.serverTimestamp(),
+                  });
 
                   Navigator.pop(context);
                 }
               },
-              child: const Text("Add"),
+              child: const Text(
+                "Add",
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         );
@@ -355,7 +509,25 @@ class _TaskListScreenState extends State<TaskListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.title)),
+      appBar: AppBar(
+        title: Text(
+          widget.title,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 22,
+            color: Colors.white,
+          ),
+        ),
+        centerTitle: true,
+        backgroundColor: Colors.blue, // Blue background
+        elevation: 4.0, // Subtle shadow for depth
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            bottom: Radius.circular(16), // Rounded bottom corners
+          ),
+        ),
+      ),
+
 
       body: StreamBuilder<QuerySnapshot>(
         stream:
@@ -392,50 +564,71 @@ class _TaskListScreenState extends State<TaskListScreen> {
                 itemBuilder: (context, index) {
                   final task = tasksList[index].data() as Map<String, dynamic>;
 
-                  return ListTile(
-                    title: Text(task["title"] ?? "Untitled"),
-                    subtitle: Text(
-                      task["assignee"] != null && task["assignee"] != ""
-                          ? "Assigned to ${task["assignee"]}"
-                          : "Unassigned",
+                  return Card(
+                    margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                    elevation: 4,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    leading: Checkbox(
-                      value: task["completed"] ?? false,
-                      onChanged: (bool? value) {
-                        FirebaseFirestore.instance
-                            .collection('taskGroups')
-                            .doc(groupId)
-                            .collection('tasksList')
-                            .doc(tasksList[index].id)
-                            .update({"completed": value});
-                      },
-                    ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete),
-                      onPressed: () {
-                        FirebaseFirestore.instance
-                            .collection('taskGroups')
-                            .doc(groupId)
-                            .collection('tasksList')
-                            .doc(tasksList[index].id)
-                            .delete();
-                      },
-                    ),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => TaskDetailScreen(
-                            groupId: groupId,
-                            taskId: tasksList[index].id,
-                            currentUserName: widget.currentUserName, // <-- eklenen satır
-                          ),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.all(16),
+                      title: Text(
+                        task["title"] ?? "Untitled",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                          color: Colors.black87,
                         ),
-                      );
-                    },
+                      ),
+                      subtitle: Text(
+                        task["assignee"] != null && task["assignee"] != ""
+                            ? "Assigned to ${task["assignee"]}"
+                            : "Unassigned",
+                        style: TextStyle(
+                          color: task["assignee"] != null && task["assignee"] != ""
+                              ? Colors.green
+                              : Colors.red,
+                        ),
+                      ),
+                      leading: Checkbox(
+                        value: task["completed"] ?? false,
+                        onChanged: (bool? value) {
+                          FirebaseFirestore.instance
+                              .collection('taskGroups')
+                              .doc(groupId)
+                              .collection('tasksList')
+                              .doc(tasksList[index].id)
+                              .update({"completed": value});
+                        },
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.red),
+                        onPressed: () {
+                          FirebaseFirestore.instance
+                              .collection('taskGroups')
+                              .doc(groupId)
+                              .collection('tasksList')
+                              .doc(tasksList[index].id)
+                              .delete();
+                        },
+                      ),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => TaskDetailScreen(
+                              groupId: groupId,
+                              taskId: tasksList[index].id,
+                              currentUserName: widget.currentUserName, // <-- eklenen satır
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                   );
                 },
               );
+
             },
           );
         },
@@ -443,6 +636,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
       floatingActionButton: FloatingActionButton(
         child: const Icon(Icons.add),
+        backgroundColor: Colors.blue,
         onPressed: _addTask,
       ),
     );
@@ -498,14 +692,14 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
       context: context,
       builder: (context) {
         return FutureBuilder<DocumentSnapshot>(
-          future:
-              FirebaseFirestore.instance
-                  .collection('taskGroups')
-                  .doc(widget.groupId)
-                  .get(),
+          future: FirebaseFirestore.instance
+              .collection('taskGroups')
+              .doc(widget.groupId)
+              .get(),
           builder: (context, snapshot) {
-            if (!snapshot.hasData)
+            if (!snapshot.hasData) {
               return const Center(child: CircularProgressIndicator());
+            }
 
             List<dynamic> sharedUsers = snapshot.data!['sharedWith'];
             List<String> options = [
@@ -514,43 +708,131 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
             ];
 
             return AlertDialog(
-              title: const Text("Edit Task"),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: titleController,
-                    decoration: const InputDecoration(labelText: "Title"),
-                  ),
-                  TextField(
-                    controller: descController,
-                    decoration: const InputDecoration(labelText: "Description"),
-                  ),
-                  const SizedBox(height: 10),
-                  DropdownButton<String>(
-                    isExpanded: true,
-                    value: currentAssignee,
-                    items:
-                        options.map((user) {
-                          return DropdownMenuItem(
-                            value: user,
-                            child: Text(user),
-                          );
-                        }).toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        currentAssignee = value;
-                      });
-                    },
-                  ),
-                ],
+              title: const Text(
+                "Edit Task",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              content: StatefulBuilder(
+                builder: (context, setInnerState) {
+                  return ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      maxHeight: 600,
+                      maxWidth: 500,
+                    ),
+                    child: SingleChildScrollView(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // Task Title
+                            TextField(
+                              controller: titleController,
+                              decoration: InputDecoration(
+                                labelText: "Title",
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10.0),
+                                  borderSide: const BorderSide(color: Colors.grey),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                    vertical: 16.0, horizontal: 20.0),
+                              ),
+                              style: const TextStyle(fontSize: 16),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Description
+                            const Text(
+                              "Description:",
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              height: 180,
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Scrollbar(
+                                thumbVisibility: true,
+                                child: SingleChildScrollView(
+                                  padding:
+                                  const EdgeInsets.symmetric(horizontal: 12),
+                                  child: TextField(
+                                    controller: descController,
+                                    decoration: const InputDecoration(
+                                      hintText: "Enter task description",
+                                      border: InputBorder.none,
+                                    ),
+                                    keyboardType: TextInputType.multiline,
+                                    maxLines: null,
+                                    style: const TextStyle(fontSize: 16),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+
+                            // Assignee
+                            const Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                "Assign to:",
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: Colors.grey),
+                              ),
+                              child: DropdownButton<String>(
+                                isExpanded: true,
+                                value: currentAssignee,
+                                items: options.map((user) {
+                                  return DropdownMenuItem(
+                                    value: user,
+                                    child: Text(user),
+                                  );
+                                }).toList(),
+                                onChanged: (value) {
+                                  setInnerState(() {
+                                    currentAssignee = value!;
+                                  });
+                                },
+                                underline: const SizedBox(),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
               actions: [
+                // Cancel Button
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text("Cancel"),
+                  child: const Text(
+                    "Cancel",
+                    style: TextStyle(color: Colors.red),
+                  ),
                 ),
-                TextButton(
+                // Save Button
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding:
+                    const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
+                  ),
                   onPressed: () async {
                     await FirebaseFirestore.instance
                         .collection('taskGroups')
@@ -558,17 +840,20 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                         .collection('tasksList')
                         .doc(widget.taskId)
                         .update({
-                          "title": titleController.text,
-                          "description": descController.text,
-                          "assignee":
-                              currentAssignee == "Unassigned"
-                                  ? null
-                                  : currentAssignee,
-                        });
+                      "title": titleController.text,
+                      "description": descController.text,
+                      "assignee": currentAssignee == "Unassigned"
+                          ? null
+                          : currentAssignee,
+                    });
                     Navigator.pop(context);
                     _fetchTaskData();
                   },
-                  child: const Text("Save"),
+                  child: const Text(
+                    "Save",
+                    style:
+                    TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ],
             );
@@ -576,6 +861,8 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
         );
       },
     );
+
+
   }
 
   Future<void> _addComment(String commentText) async {
@@ -610,9 +897,28 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(taskData!['title'] ?? "Task Detail"),
+        title: Text(
+          taskData!['title'] ?? "Task Detail",
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 22,
+            color: Colors.white,
+          ),
+        ),
+        centerTitle: true,
+        backgroundColor: Colors.blue,
+        elevation: 4.0,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            bottom: Radius.circular(16),
+          ),
+        ),
         actions: [
-          IconButton(icon: const Icon(Icons.edit), onPressed: _editTask),
+          IconButton(
+            icon: const Icon(Icons.edit, color: Colors.white),
+            onPressed: _editTask,
+            tooltip: 'Edit Task',
+          ),
         ],
       ),
       body: Padding(
@@ -620,15 +926,43 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Title and Description Section
             Text(
-              "Description: ${taskData!['description'] ?? 'No description'}",
+              "Description:",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
             ),
-            const SizedBox(height: 8),
-            Text("Assignee: ${taskData!['assignee'] ?? 'Unassigned'}"),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
+            Text(
+              taskData!['description'] ?? 'No description',
+              style: TextStyle(fontSize: 16, color: Colors.black54),
+            ),
+            const SizedBox(height: 16),
+
+            // Assignee Section
+            Text(
+              "Assignee:",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              taskData!['assignee'] ?? 'Unassigned',
+              style: TextStyle(fontSize: 16, color: Colors.black87),
+            ),
+            const SizedBox(height: 16),
+
+            // Completed Checkbox Section
             Row(
               children: [
-                const Text("Completed: "),
+                const Text(
+                  "Completed: ",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
                 Checkbox(
                   value: taskData!['completed'] ?? false,
                   onChanged: (value) async {
@@ -643,63 +977,95 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                 ),
               ],
             ),
-            const Divider(height: 32),
+
+            // Divider for Comments Section
+            const Divider(height: 32, thickness: 1.5, color: Colors.grey),
             const Text(
               "Comments",
-              style: TextStyle(fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: Colors.blueGrey,
+              ),
             ),
             const SizedBox(height: 10),
+
+            // StreamBuilder for Comments
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
-                stream:
-                    FirebaseFirestore.instance
-                        .collection('taskGroups')
-                        .doc(widget.groupId)
-                        .collection('tasksList')
-                        .doc(widget.taskId)
-                        .collection('comments')
-                        .orderBy('timestamp')
-                        .snapshots(),
+                stream: FirebaseFirestore.instance
+                    .collection('taskGroups')
+                    .doc(widget.groupId)
+                    .collection('tasksList')
+                    .doc(widget.taskId)
+                    .collection('comments')
+                    .orderBy('timestamp')
+                    .snapshots(),
                 builder: (context, snapshot) {
                   if (!snapshot.hasData)
-                    return const Text("Loading comments...");
+                    return const Center(child: CircularProgressIndicator());
                   final comments = snapshot.data!.docs;
-                  if (comments.isEmpty) return const Text("No comments yet.");
+                  if (comments.isEmpty)
+                    return const Center(child: Text("No comments yet."));
 
                   return ListView(
-                    children:
-                        comments.map((doc) {
-                          final data = doc.data() as Map<String, dynamic>;
-                          return ListTile(
-                            title: Text(data['text'] ?? ''),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                if (data['author'] != null)
-                                  Text("By: ${data['author']}"), // <-- eklenen satır
-                                if (data['timestamp'] != null)
-                                  Text(data['timestamp'].toDate().toString()),
-                              ],
-                            ),
-                          );
-                        }).toList(),
+                    children: comments.map((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      return Card(
+                        margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                        elevation: 4,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.all(16),
+                          title: Text(
+                            data['text'] ?? '',
+                            style: TextStyle(fontSize: 16),
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (data['author'] != null)
+                                Text(
+                                  "By: ${data['author']}",
+                                  style: TextStyle(color: Colors.blueGrey, fontSize: 14),
+                                ),
+                              if (data['timestamp'] != null)
+                                Text(
+                                  data['timestamp'].toDate().toString(),
+                                  style: TextStyle(color: Colors.grey, fontSize: 12),
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
                   );
                 },
               ),
             ),
+
             const SizedBox(height: 10),
+
+            // Comment Input Section
             Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: _commentController,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       hintText: "Add a comment...",
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: Colors.grey),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                     ),
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.send),
+                  icon: const Icon(Icons.send, color: Colors.blue),
                   onPressed: () {
                     _addComment(_commentController.text);
                   },
@@ -710,5 +1076,6 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
         ),
       ),
     );
+
   }
 }
