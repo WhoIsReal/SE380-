@@ -51,7 +51,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _addTaskGroupToFirestore(String title, List<String> sharedUsers) async {
-    await FirebaseFirestore.instance.collection('tasksGroups').add({
+    await FirebaseFirestore.instance.collection('taskGroups').add({
       'title': title,
       'sharedWith': sharedUsers,
       'timestamp': FieldValue.serverTimestamp(),
@@ -200,7 +200,6 @@ class TaskListScreen extends StatefulWidget {
 }
 
 class _TaskListScreenState extends State<TaskListScreen> {
-  List<Map<String, dynamic>> tasks = [];
 
   void _addTask() {
     TextEditingController taskController = TextEditingController();
@@ -286,7 +285,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
                   await FirebaseFirestore.instance
                       .collection('taskGroups')
                       .doc(groupId)
-                      .collection('tasks')
+                      .collection('tasksList')
                       .add({
                     "title": taskController.text,
                     "description": descController.text,
@@ -314,53 +313,68 @@ class _TaskListScreenState extends State<TaskListScreen> {
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('taskGroups')
-            .doc(widget.title)
-            .collection('tasksList')
-            .orderBy('timestamp')
+            .where('title', isEqualTo: widget.title)
+            .limit(1)
             .snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return const Center(child: Text("No tasks yet. Add some!"));
           }
 
-          final tasksList = snapshot.data!.docs;
+          final groupDoc = snapshot.data!.docs.first;
+          final groupId = groupDoc.id;
 
-          return ListView.builder(
-            itemCount: tasksList.length,
-            itemBuilder: (context, index) {
-              final task = tasksList[index].data() as Map<String, dynamic>;
+          return StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('taskGroups')
+                .doc(groupId)
+                .collection('tasksList')
+                .orderBy('timestamp')
+                .snapshots(),
+            builder: (context, taskSnapshot) {
+              if (!taskSnapshot.hasData || taskSnapshot.data!.docs.isEmpty) {
+                return const Center(child: Text("No tasks yet. Add some!"));
+              }
 
-              return ListTile(
-                title: Text(task["title"] ?? "Untitled"),
-                subtitle: Text(task["assignedTo"] != null && task["assignedTo"] != ""
-                    ? "Assigned to ${task["assignedTo"]}"
-                    : "Unassigned"),
-                leading: Checkbox(
-                  value: task["completed"] ?? false,
-                  onChanged: (bool? value) {
-                    FirebaseFirestore.instance
-                        .collection('taskGroups')
-                        .doc(widget.title)
-                        .collection('tasksList')
-                        .doc(tasksList[index].id)
-                        .update({"completed": value});
-                  },
-                ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete),
-                  onPressed: () {
-                    FirebaseFirestore.instance
-                        .collection('taskGroups')
-                        .doc(widget.title)
-                        .collection('tasksList')
-                        .doc(tasksList[index].id)
-                        .delete();
-                  },
-                ),
+              final tasksList = taskSnapshot.data!.docs;
+
+              return ListView.builder(
+                itemCount: tasksList.length,
+                itemBuilder: (context, index) {
+                  final task = tasksList[index].data() as Map<String, dynamic>;
+
+                  return ListTile(
+                    title: Text(task["title"] ?? "Untitled"),
+                    subtitle: Text(task["assignee"] != null && task["assignee"] != ""
+                        ? "Assigned to ${task["assignee"]}"
+                        : "Unassigned"),
+                    leading: Checkbox(
+                      value: task["completed"] ?? false,
+                      onChanged: (bool? value) {
+                        FirebaseFirestore.instance
+                            .collection('taskGroups')
+                            .doc(groupId)
+                            .collection('tasksList')
+                            .doc(tasksList[index].id)
+                            .update({"completed": value});
+                      },
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete),
+                      onPressed: () {
+                        FirebaseFirestore.instance
+                            .collection('taskGroups')
+                            .doc(groupId)
+                            .collection('tasksList')
+                            .doc(tasksList[index].id)
+                            .delete();
+                      },
+                    ),
+                    onTap: () {
+                      _showTaskDetailsDialog(task);
+                    },
+                  );
+                },
               );
             },
           );
@@ -374,4 +388,32 @@ class _TaskListScreenState extends State<TaskListScreen> {
     );
   }
 
+  void _showTaskDetailsDialog(Map<String, dynamic> task) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(task["title"] ?? "No Title"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("Description:"),
+              Text(task["description"] ?? "No description"),
+              const SizedBox(height: 10),
+              Text("Assignee: ${task["assignee"] ?? "Unassigned"}"),
+              const SizedBox(height: 10),
+              Text("Status: ${task["completed"] == true ? "Completed" : "Not Completed"}"),
+            ],
+          ),
+          actions: [
+            TextButton(
+              child: const Text("Close"),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }
