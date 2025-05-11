@@ -371,7 +371,15 @@ class _TaskListScreenState extends State<TaskListScreen> {
                       },
                     ),
                     onTap: () {
-                      _showTaskDetailsDialog(task);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => TaskDetailScreen(
+                            groupId: groupId,
+                            taskId: tasksList[index].id,
+                          ),
+                        ),
+                      );
                     },
                   );
                 },
@@ -387,33 +395,236 @@ class _TaskListScreenState extends State<TaskListScreen> {
       ),
     );
   }
+}
+class TaskDetailScreen extends StatefulWidget {
+  final String groupId;
+  final String taskId;
 
-  void _showTaskDetailsDialog(Map<String, dynamic> task) {
+  const TaskDetailScreen({super.key, required this.groupId, required this.taskId});
+
+  @override
+  State<TaskDetailScreen> createState() => _TaskDetailScreenState();
+}
+
+class _TaskDetailScreenState extends State<TaskDetailScreen> {
+  final TextEditingController _commentController = TextEditingController();
+  Map<String, dynamic>? taskData;
+  bool isLoading = true;
+
+  Future<void> _fetchTaskData() async {
+    final taskDoc = await FirebaseFirestore.instance
+        .collection('taskGroups')
+        .doc(widget.groupId)
+        .collection('tasksList')
+        .doc(widget.taskId)
+        .get();
+
+    if (taskDoc.exists) {
+      setState(() {
+        taskData = taskDoc.data()!;
+        isLoading = false;
+      });
+    }
+  }
+
+  void _editTask() {
+    final titleController = TextEditingController(text: taskData?['title']);
+    final descController = TextEditingController(text: taskData?['description']);
+    String? currentAssignee = taskData?['assignee'] ?? "Unassigned";
+
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: Text(task["title"] ?? "No Title"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text("Description:"),
-              Text(task["description"] ?? "No description"),
-              const SizedBox(height: 10),
-              Text("Assignee: ${task["assignee"] ?? "Unassigned"}"),
-              const SizedBox(height: 10),
-              Text("Status: ${task["completed"] == true ? "Completed" : "Not Completed"}"),
-            ],
-          ),
-          actions: [
-            TextButton(
-              child: const Text("Close"),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-          ],
+        return FutureBuilder<DocumentSnapshot>(
+          future: FirebaseFirestore.instance.collection('taskGroups').doc(widget.groupId).get(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+
+            List<dynamic> sharedUsers = snapshot.data!['sharedWith'];
+            List<String> options = ["Unassigned", ...sharedUsers.map((u) => u.toString())];
+
+            return AlertDialog(
+              title: const Text("Edit Task"),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: titleController,
+                    decoration: const InputDecoration(labelText: "Title"),
+                  ),
+                  TextField(
+                    controller: descController,
+                    decoration: const InputDecoration(labelText: "Description"),
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButton<String>(
+                    isExpanded: true,
+                    value: currentAssignee,
+                    items: options.map((user) {
+                      return DropdownMenuItem(
+                        value: user,
+                        child: Text(user),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        currentAssignee = value;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Cancel"),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    await FirebaseFirestore.instance
+                        .collection('taskGroups')
+                        .doc(widget.groupId)
+                        .collection('tasksList')
+                        .doc(widget.taskId)
+                        .update({
+                      "title": titleController.text,
+                      "description": descController.text,
+                      "assignee": currentAssignee == "Unassigned" ? null : currentAssignee,
+                    });
+                    Navigator.pop(context);
+                    _fetchTaskData();
+                  },
+                  child: const Text("Save"),
+                ),
+              ],
+            );
+          },
         );
       },
     );
   }
+
+  Future<void> _addComment(String commentText) async {
+    if (commentText.trim().isEmpty) return;
+
+    await FirebaseFirestore.instance
+        .collection('taskGroups')
+        .doc(widget.groupId)
+        .collection('tasksList')
+        .doc(widget.taskId)
+        .collection('comments')
+        .add({
+      "text": commentText.trim(),
+      "timestamp": FieldValue.serverTimestamp(),
+    });
+
+    _commentController.clear();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchTaskData();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading || taskData == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(taskData!['title'] ?? "Task Detail"),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.edit),
+            onPressed: _editTask,
+          ),
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("Description: ${taskData!['description'] ?? 'No description'}"),
+            const SizedBox(height: 8),
+            Text("Assignee: ${taskData!['assignee'] ?? 'Unassigned'}"),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Text("Completed: "),
+                Checkbox(
+                  value: taskData!['completed'] ?? false,
+                  onChanged: (value) async {
+                    await FirebaseFirestore.instance
+                        .collection('taskGroups')
+                        .doc(widget.groupId)
+                        .collection('tasksList')
+                        .doc(widget.taskId)
+                        .update({"completed": value});
+                    _fetchTaskData();
+                  },
+                ),
+              ],
+            ),
+            const Divider(height: 32),
+            const Text("Comments", style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('taskGroups')
+                    .doc(widget.groupId)
+                    .collection('tasksList')
+                    .doc(widget.taskId)
+                    .collection('comments')
+                    .orderBy('timestamp')
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) return const Text("Loading comments...");
+                  final comments = snapshot.data!.docs;
+                  if (comments.isEmpty) return const Text("No comments yet.");
+
+                  return ListView(
+                    children: comments.map((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      return ListTile(
+                        title: Text(data['text'] ?? ''),
+                        subtitle: data['timestamp'] != null
+                            ? Text(data['timestamp'].toDate().toString())
+                            : null,
+                      );
+                    }).toList(),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _commentController,
+                    decoration: const InputDecoration(
+                      hintText: "Add a comment...",
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.send),
+                  onPressed: () {
+                    _addComment(_commentController.text);
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
+
+
