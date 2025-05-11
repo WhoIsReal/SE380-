@@ -27,7 +27,8 @@ class MyApp extends StatelessWidget {
 }
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final String currentUserName;
+  const HomeScreen({super.key, required this.currentUserName});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -39,7 +40,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _fetchUsersFromFirestore() async {
     final snapshot = await FirebaseFirestore.instance.collection('users').get();
-    final fetchedUsers = snapshot.docs.map((doc) => doc['name'] as String).toList();
+    final fetchedUsers =
+        snapshot.docs.map((doc) => doc['name'] as String).toList();
 
     setState(() {
       users = fetchedUsers;
@@ -50,7 +52,10 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  Future<void> _addTaskGroupToFirestore(String title, List<String> sharedUsers) async {
+  Future<void> _addTaskGroupToFirestore(
+    String title,
+    List<String> sharedUsers,
+  ) async {
     await FirebaseFirestore.instance.collection('taskGroups').add({
       'title': title,
       'sharedWith': sharedUsers,
@@ -113,12 +118,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 TextButton(
                   onPressed: () async {
                     if (taskController.text.isNotEmpty) {
-                      final selected = selectedUsers.entries
-                          .where((entry) => entry.value)
-                          .map((entry) => entry.key)
-                          .toList();
+                      final selected =
+                          selectedUsers.entries
+                              .where((entry) => entry.value)
+                              .map((entry) => entry.key)
+                              .toList();
 
-                      await _addTaskGroupToFirestore(taskController.text, selected);
+                      await _addTaskGroupToFirestore(
+                        taskController.text,
+                        selected,
+                      );
 
                       for (var user in users) {
                         selectedUsers[user] = false;
@@ -150,11 +159,27 @@ class _HomeScreenState extends State<HomeScreen> {
           fontWeight: FontWeight.bold,
         ),
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('taskGroups').orderBy('timestamp').snapshots(),
+      body: widget.currentUserName.isEmpty
+          ? const Center(child: Text("User not found. Please login again."))
+          : StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('taskGroups')
+            .where('sharedWith', arrayContains: widget.currentUserName)
+            .orderBy('timestamp')
+            .snapshots(),
         builder: (context, snapshot) {
-          if (!snapshot.hasData) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Text("Error: ${snapshot.error}"),
+            );
+          }
+
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
+          }
+
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return const Center(child: Text("No task groups shared with you."));
           }
 
           final taskGroups = snapshot.data!.docs;
@@ -173,7 +198,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => TaskListScreen(title: title),
+                      builder: (context) =>
+                          TaskListScreen(title: title),
                     ),
                   );
                 },
@@ -200,7 +226,6 @@ class TaskListScreen extends StatefulWidget {
 }
 
 class _TaskListScreenState extends State<TaskListScreen> {
-
   void _addTask() {
     TextEditingController taskController = TextEditingController();
     TextEditingController descController = TextEditingController();
@@ -219,12 +244,16 @@ class _TaskListScreenState extends State<TaskListScreen> {
                   children: [
                     TextField(
                       controller: taskController,
-                      decoration: const InputDecoration(hintText: "Enter task name"),
+                      decoration: const InputDecoration(
+                        hintText: "Enter task name",
+                      ),
                     ),
                     const SizedBox(height: 10),
                     TextField(
                       controller: descController,
-                      decoration: const InputDecoration(hintText: "Enter task description"),
+                      decoration: const InputDecoration(
+                        hintText: "Enter task description",
+                      ),
                     ),
                     const SizedBox(height: 20),
                     const Align(
@@ -239,20 +268,26 @@ class _TaskListScreenState extends State<TaskListScreen> {
                           .get()
                           .then((snapshot) => snapshot.docs.first),
                       builder: (context, snapshot) {
-                        if (!snapshot.hasData) return const CircularProgressIndicator();
+                        if (!snapshot.hasData)
+                          return const CircularProgressIndicator();
 
-                        List<dynamic> sharedUsers = snapshot.data!['sharedWith'];
-                        List<String> options = ["Unassigned", ...sharedUsers.map((u) => u.toString())];
+                        List<dynamic> sharedUsers =
+                            snapshot.data!['sharedWith'];
+                        List<String> options = [
+                          "Unassigned",
+                          ...sharedUsers.map((u) => u.toString()),
+                        ];
 
                         return DropdownButton<String>(
                           isExpanded: true,
                           value: selectedAssignee,
-                          items: options.map((user) {
-                            return DropdownMenuItem(
-                              value: user,
-                              child: Text(user),
-                            );
-                          }).toList(),
+                          items:
+                              options.map((user) {
+                                return DropdownMenuItem(
+                                  value: user,
+                                  child: Text(user),
+                                );
+                              }).toList(),
                           onChanged: (value) {
                             setInnerState(() {
                               selectedAssignee = value;
@@ -274,11 +309,12 @@ class _TaskListScreenState extends State<TaskListScreen> {
             TextButton(
               onPressed: () async {
                 if (taskController.text.isNotEmpty) {
-                  final groupSnapshot = await FirebaseFirestore.instance
-                      .collection('taskGroups')
-                      .where('title', isEqualTo: widget.title)
-                      .limit(1)
-                      .get();
+                  final groupSnapshot =
+                      await FirebaseFirestore.instance
+                          .collection('taskGroups')
+                          .where('title', isEqualTo: widget.title)
+                          .limit(1)
+                          .get();
 
                   final groupId = groupSnapshot.docs.first.id;
 
@@ -287,12 +323,15 @@ class _TaskListScreenState extends State<TaskListScreen> {
                       .doc(groupId)
                       .collection('tasksList')
                       .add({
-                    "title": taskController.text,
-                    "description": descController.text,
-                    "completed": false,
-                    "assignee": selectedAssignee == "Unassigned" ? null : selectedAssignee,
-                    "timestamp": FieldValue.serverTimestamp(),
-                  });
+                        "title": taskController.text,
+                        "description": descController.text,
+                        "completed": false,
+                        "assignee":
+                            selectedAssignee == "Unassigned"
+                                ? null
+                                : selectedAssignee,
+                        "timestamp": FieldValue.serverTimestamp(),
+                      });
 
                   Navigator.pop(context);
                 }
@@ -311,11 +350,12 @@ class _TaskListScreenState extends State<TaskListScreen> {
       appBar: AppBar(title: Text(widget.title)),
 
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('taskGroups')
-            .where('title', isEqualTo: widget.title)
-            .limit(1)
-            .snapshots(),
+        stream:
+            FirebaseFirestore.instance
+                .collection('taskGroups')
+                .where('title', isEqualTo: widget.title)
+                .limit(1)
+                .snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return const Center(child: Text("No tasks yet. Add some!"));
@@ -325,12 +365,13 @@ class _TaskListScreenState extends State<TaskListScreen> {
           final groupId = groupDoc.id;
 
           return StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('taskGroups')
-                .doc(groupId)
-                .collection('tasksList')
-                .orderBy('timestamp')
-                .snapshots(),
+            stream:
+                FirebaseFirestore.instance
+                    .collection('taskGroups')
+                    .doc(groupId)
+                    .collection('tasksList')
+                    .orderBy('timestamp')
+                    .snapshots(),
             builder: (context, taskSnapshot) {
               if (!taskSnapshot.hasData || taskSnapshot.data!.docs.isEmpty) {
                 return const Center(child: Text("No tasks yet. Add some!"));
@@ -345,9 +386,11 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
                   return ListTile(
                     title: Text(task["title"] ?? "Untitled"),
-                    subtitle: Text(task["assignee"] != null && task["assignee"] != ""
-                        ? "Assigned to ${task["assignee"]}"
-                        : "Unassigned"),
+                    subtitle: Text(
+                      task["assignee"] != null && task["assignee"] != ""
+                          ? "Assigned to ${task["assignee"]}"
+                          : "Unassigned",
+                    ),
                     leading: Checkbox(
                       value: task["completed"] ?? false,
                       onChanged: (bool? value) {
@@ -374,10 +417,11 @@ class _TaskListScreenState extends State<TaskListScreen> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => TaskDetailScreen(
-                            groupId: groupId,
-                            taskId: tasksList[index].id,
-                          ),
+                          builder:
+                              (context) => TaskDetailScreen(
+                                groupId: groupId,
+                                taskId: tasksList[index].id,
+                              ),
                         ),
                       );
                     },
@@ -396,11 +440,16 @@ class _TaskListScreenState extends State<TaskListScreen> {
     );
   }
 }
+
 class TaskDetailScreen extends StatefulWidget {
   final String groupId;
   final String taskId;
 
-  const TaskDetailScreen({super.key, required this.groupId, required this.taskId});
+  const TaskDetailScreen({
+    super.key,
+    required this.groupId,
+    required this.taskId,
+  });
 
   @override
   State<TaskDetailScreen> createState() => _TaskDetailScreenState();
@@ -412,12 +461,13 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   bool isLoading = true;
 
   Future<void> _fetchTaskData() async {
-    final taskDoc = await FirebaseFirestore.instance
-        .collection('taskGroups')
-        .doc(widget.groupId)
-        .collection('tasksList')
-        .doc(widget.taskId)
-        .get();
+    final taskDoc =
+        await FirebaseFirestore.instance
+            .collection('taskGroups')
+            .doc(widget.groupId)
+            .collection('tasksList')
+            .doc(widget.taskId)
+            .get();
 
     if (taskDoc.exists) {
       setState(() {
@@ -429,19 +479,29 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
 
   void _editTask() {
     final titleController = TextEditingController(text: taskData?['title']);
-    final descController = TextEditingController(text: taskData?['description']);
+    final descController = TextEditingController(
+      text: taskData?['description'],
+    );
     String? currentAssignee = taskData?['assignee'] ?? "Unassigned";
 
     showDialog(
       context: context,
       builder: (context) {
         return FutureBuilder<DocumentSnapshot>(
-          future: FirebaseFirestore.instance.collection('taskGroups').doc(widget.groupId).get(),
+          future:
+              FirebaseFirestore.instance
+                  .collection('taskGroups')
+                  .doc(widget.groupId)
+                  .get(),
           builder: (context, snapshot) {
-            if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+            if (!snapshot.hasData)
+              return const Center(child: CircularProgressIndicator());
 
             List<dynamic> sharedUsers = snapshot.data!['sharedWith'];
-            List<String> options = ["Unassigned", ...sharedUsers.map((u) => u.toString())];
+            List<String> options = [
+              "Unassigned",
+              ...sharedUsers.map((u) => u.toString()),
+            ];
 
             return AlertDialog(
               title: const Text("Edit Task"),
@@ -460,12 +520,13 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                   DropdownButton<String>(
                     isExpanded: true,
                     value: currentAssignee,
-                    items: options.map((user) {
-                      return DropdownMenuItem(
-                        value: user,
-                        child: Text(user),
-                      );
-                    }).toList(),
+                    items:
+                        options.map((user) {
+                          return DropdownMenuItem(
+                            value: user,
+                            child: Text(user),
+                          );
+                        }).toList(),
                     onChanged: (value) {
                       setState(() {
                         currentAssignee = value;
@@ -487,10 +548,13 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                         .collection('tasksList')
                         .doc(widget.taskId)
                         .update({
-                      "title": titleController.text,
-                      "description": descController.text,
-                      "assignee": currentAssignee == "Unassigned" ? null : currentAssignee,
-                    });
+                          "title": titleController.text,
+                          "description": descController.text,
+                          "assignee":
+                              currentAssignee == "Unassigned"
+                                  ? null
+                                  : currentAssignee,
+                        });
                     Navigator.pop(context);
                     _fetchTaskData();
                   },
@@ -514,9 +578,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
         .doc(widget.taskId)
         .collection('comments')
         .add({
-      "text": commentText.trim(),
-      "timestamp": FieldValue.serverTimestamp(),
-    });
+          "text": commentText.trim(),
+          "timestamp": FieldValue.serverTimestamp(),
+        });
 
     _commentController.clear();
   }
@@ -537,10 +601,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
       appBar: AppBar(
         title: Text(taskData!['title'] ?? "Task Detail"),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: _editTask,
-          ),
+          IconButton(icon: const Icon(Icons.edit), onPressed: _editTask),
         ],
       ),
       body: Padding(
@@ -548,7 +609,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Description: ${taskData!['description'] ?? 'No description'}"),
+            Text(
+              "Description: ${taskData!['description'] ?? 'No description'}",
+            ),
             const SizedBox(height: 8),
             Text("Assignee: ${taskData!['assignee'] ?? 'Unassigned'}"),
             const SizedBox(height: 8),
@@ -570,33 +633,42 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
               ],
             ),
             const Divider(height: 32),
-            const Text("Comments", style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text(
+              "Comments",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 10),
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('taskGroups')
-                    .doc(widget.groupId)
-                    .collection('tasksList')
-                    .doc(widget.taskId)
-                    .collection('comments')
-                    .orderBy('timestamp')
-                    .snapshots(),
+                stream:
+                    FirebaseFirestore.instance
+                        .collection('taskGroups')
+                        .doc(widget.groupId)
+                        .collection('tasksList')
+                        .doc(widget.taskId)
+                        .collection('comments')
+                        .orderBy('timestamp')
+                        .snapshots(),
                 builder: (context, snapshot) {
-                  if (!snapshot.hasData) return const Text("Loading comments...");
+                  if (!snapshot.hasData)
+                    return const Text("Loading comments...");
                   final comments = snapshot.data!.docs;
                   if (comments.isEmpty) return const Text("No comments yet.");
 
                   return ListView(
-                    children: comments.map((doc) {
-                      final data = doc.data() as Map<String, dynamic>;
-                      return ListTile(
-                        title: Text(data['text'] ?? ''),
-                        subtitle: data['timestamp'] != null
-                            ? Text(data['timestamp'].toDate().toString())
-                            : null,
-                      );
-                    }).toList(),
+                    children:
+                        comments.map((doc) {
+                          final data = doc.data() as Map<String, dynamic>;
+                          return ListTile(
+                            title: Text(data['text'] ?? ''),
+                            subtitle:
+                                data['timestamp'] != null
+                                    ? Text(
+                                      data['timestamp'].toDate().toString(),
+                                    )
+                                    : null,
+                          );
+                        }).toList(),
                   );
                 },
               ),
@@ -626,5 +698,3 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     );
   }
 }
-
-

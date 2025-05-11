@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:se_term_project/register_screen.dart';
@@ -31,10 +30,13 @@ class LoginScreen extends StatelessWidget {
             .get();
 
         if (snapshot.docs.isNotEmpty) {
+          final userDoc = snapshot.docs.first;
+          final userName = userDoc['name'].toString().trim();
+
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
-              builder: (context) => const HomeScreen(),
+              builder: (context) => HomeScreen(currentUserName: userName),
             ),
           );
         } else {
@@ -44,7 +46,7 @@ class LoginScreen extends StatelessWidget {
         }
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Login failed: \$e")),
+          SnackBar(content: Text("Login failed: $e")),
         );
       }
     }
