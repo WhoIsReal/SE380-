@@ -69,7 +69,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _fetchUsersFromFirestore();
   }
 
-  void _showAddTaskDialog() {
+  void _showAddTaskGroupDialog() {
     TextEditingController taskController = TextEditingController();
 
     showDialog(
@@ -248,6 +248,7 @@ class _HomeScreenState extends State<HomeScreen> {
               final data = doc.data() as Map<String, dynamic>;
               final title = data['title'];
               final users = data['sharedWith'] as List<dynamic>;
+              final groupId = doc.id; // Task Group ID to delete the group later
 
               return Card(
                 elevation: 3,
@@ -275,16 +276,27 @@ class _HomeScreenState extends State<HomeScreen> {
                     "Shared with ${users.length} people",
                     style: const TextStyle(fontSize: 13),
                   ),
-                  trailing: const Icon(Icons.chevron_right),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.red),
+                        onPressed: () {
+                          _showDeleteConfirmationDialog(groupId); // Call the delete dialog
+                        },
+                      ),
+                      const Icon(Icons.chevron_right),
+                    ],
+                  ),
                   onTap: () {
                     Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => TaskListScreen(
-                          title: title,
-                          currentUserName: widget.currentUserName,
-                        ),
-                      ),
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => TaskListScreen(
+                            title: title,
+                            currentUserName: widget.currentUserName,
+                          ),
+                        )
                     );
                   },
                 ),
@@ -295,22 +307,81 @@ class _HomeScreenState extends State<HomeScreen> {
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _showAddTaskDialog,
+        onPressed: _showAddTaskGroupDialog,
         child: const Icon(Icons.add),
         backgroundColor: Colors.blue,
       ),
     );
   }
+
+  void _showDeleteConfirmationDialog(String groupId) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Delete Task Group'),
+          content: const Text('Are you sure you want to delete this task group? This will also delete all tasks within it.'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context); // Close the dialog
+              },
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () async {
+                await _deleteTaskGroup(groupId); // Delete the task group
+                Navigator.pop(context); // Close the dialog
+              },
+              child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _deleteTaskGroup(String groupId) async {
+    try {
+      // Fetch all tasks under this task group
+      var tasksSnapshot = await FirebaseFirestore.instance
+          .collection('taskGroups')
+          .doc(groupId)
+          .collection('tasksList')
+          .get();
+
+      // If tasks exist, delete them
+      if (tasksSnapshot.docs.isNotEmpty) {
+        for (var taskDoc in tasksSnapshot.docs) {
+          await taskDoc.reference.delete(); // Delete each task
+        }
+      }
+
+      // Now delete the task group itself
+      await FirebaseFirestore.instance
+          .collection('taskGroups')
+          .doc(groupId)
+          .delete();
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Task group and tasks deleted successfully')),
+      );
+    } catch (e) {
+      print("Error deleting task group and tasks: $e"); // Error handling
+    }
+  }
+
 }
 
 class TaskListScreen extends StatefulWidget {
   final String title;
-  final String currentUserName; // <-- Add this line
+  final String currentUserName;
 
   const TaskListScreen({
     super.key,
     required this.title,
-    required this.currentUserName, // <-- Also required here
+    required this.currentUserName,
   });
 
   @override
@@ -604,12 +675,38 @@ class _TaskListScreenState extends State<TaskListScreen> {
                       trailing: IconButton(
                         icon: const Icon(Icons.delete, color: Colors.red),
                         onPressed: () {
-                          FirebaseFirestore.instance
-                              .collection('taskGroups')
-                              .doc(groupId)
-                              .collection('tasksList')
-                              .doc(tasksList[index].id)
-                              .delete();
+                          // Show confirmation dialog
+                          showDialog(
+                            context: context,
+                            builder: (context) {
+                              return AlertDialog(
+                                title: const Text("Delete Task"),
+                                content: const Text("Are you sure you want to delete this task?"),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () {
+                                      Navigator.pop(context); // Close the dialog if "Cancel" is pressed
+                                    },
+                                    child: const Text("Cancel"),
+                                  ),
+                                  TextButton(
+                                    onPressed: () async {
+                                      // Delete the task from Firestore if "Delete" is pressed
+                                      await FirebaseFirestore.instance
+                                          .collection('taskGroups')
+                                          .doc(groupId)
+                                          .collection('tasksList')
+                                          .doc(tasksList[index].id)
+                                          .delete();
+
+                                      Navigator.pop(context); // Close the dialog after deletion
+                                    },
+                                    child: const Text("Delete"),
+                                  ),
+                                ],
+                              );
+                            },
+                          );
                         },
                       ),
                       onTap: () {
@@ -619,7 +716,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
                             builder: (context) => TaskDetailScreen(
                               groupId: groupId,
                               taskId: tasksList[index].id,
-                              currentUserName: widget.currentUserName, // <-- eklenen satır
+                              currentUserName: widget.currentUserName,
                             ),
                           ),
                         );
@@ -646,13 +743,13 @@ class _TaskListScreenState extends State<TaskListScreen> {
 class TaskDetailScreen extends StatefulWidget {
   final String groupId;
   final String taskId;
-  final String currentUserName; // <-- eklenen satır
+  final String currentUserName;
 
   const TaskDetailScreen({
     super.key,
     required this.groupId,
     required this.taskId,
-    required this.currentUserName, // <-- eklenen satır
+    required this.currentUserName,
   });
 
   @override
