@@ -194,15 +194,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 title: Text(title),
                 subtitle: Text("Shared with ${users.length} people"),
                 trailing: const Icon(Icons.group),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) =>
-                          TaskListScreen(title: title),
-                    ),
-                  );
-                },
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => TaskListScreen(
+                          title: title,
+                          currentUserName: widget.currentUserName, // ✅ FIXED
+                        ),
+                      ),
+                    );
+                  },
               );
             }).toList(),
           );
@@ -219,7 +221,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
 class TaskListScreen extends StatefulWidget {
   final String title;
-  const TaskListScreen({super.key, required this.title});
+  final String currentUserName; // <-- Add this line
+
+  const TaskListScreen({
+    super.key,
+    required this.title,
+    required this.currentUserName, // <-- Also required here
+  });
 
   @override
   _TaskListScreenState createState() => _TaskListScreenState();
@@ -417,11 +425,11 @@ class _TaskListScreenState extends State<TaskListScreen> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder:
-                              (context) => TaskDetailScreen(
-                                groupId: groupId,
-                                taskId: tasksList[index].id,
-                              ),
+                          builder: (context) => TaskDetailScreen(
+                            groupId: groupId,
+                            taskId: tasksList[index].id,
+                            currentUserName: widget.currentUserName, // <-- eklenen satır
+                          ),
                         ),
                       );
                     },
@@ -444,11 +452,13 @@ class _TaskListScreenState extends State<TaskListScreen> {
 class TaskDetailScreen extends StatefulWidget {
   final String groupId;
   final String taskId;
+  final String currentUserName; // <-- eklenen satır
 
   const TaskDetailScreen({
     super.key,
     required this.groupId,
     required this.taskId,
+    required this.currentUserName, // <-- eklenen satır
   });
 
   @override
@@ -578,9 +588,10 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
         .doc(widget.taskId)
         .collection('comments')
         .add({
-          "text": commentText.trim(),
-          "timestamp": FieldValue.serverTimestamp(),
-        });
+      "text": commentText.trim(),
+      "timestamp": FieldValue.serverTimestamp(),
+      "author": widget.currentUserName, // <-- eklenen satır
+    });
 
     _commentController.clear();
   }
@@ -661,12 +672,15 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                           final data = doc.data() as Map<String, dynamic>;
                           return ListTile(
                             title: Text(data['text'] ?? ''),
-                            subtitle:
-                                data['timestamp'] != null
-                                    ? Text(
-                                      data['timestamp'].toDate().toString(),
-                                    )
-                                    : null,
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (data['author'] != null)
+                                  Text("By: ${data['author']}"), // <-- eklenen satır
+                                if (data['timestamp'] != null)
+                                  Text(data['timestamp'].toDate().toString()),
+                              ],
+                            ),
                           );
                         }).toList(),
                   );
